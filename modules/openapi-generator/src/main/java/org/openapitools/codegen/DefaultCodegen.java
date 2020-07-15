@@ -804,32 +804,41 @@ public class DefaultCodegen implements CodegenConfig {
 
             // go through all gathered schemas and add them as interfaces to be created
             for (Map.Entry<String, Schema> e : schemas.entrySet()) {
-                String n = toModelName(e.getKey());
-                Schema s = e.getValue();
-                String nOneOf = toModelName(n + "OneOf");
-                if (ModelUtils.isComposedSchema(s)) {
-                    if (e.getKey().contains("/")) {
-                        // if this is property schema, we also need to generate the oneOf interface model
-                        addOneOfNameExtension((ComposedSchema) s, nOneOf);
-                        addOneOfInterfaceModel((ComposedSchema) s, nOneOf, openAPI);
-                    } else {
-                        // else this is a component schema, so we will just use that as the oneOf interface model
-                        addOneOfNameExtension((ComposedSchema) s, n);
-                    }
-                } else if (ModelUtils.isArraySchema(s)) {
-                    Schema items = ((ArraySchema) s).getItems();
+              String modelName = toModelName(e.getKey());
+              Schema schema = e.getValue();
+              String nOneOf = toModelName(modelName + "OneOf");
+              if (ModelUtils.isComposedSchema(schema)) {
+                  addOneOfForComposedSchema(e, modelName, (ComposedSchema) schema, nOneOf, openAPI);
+              } else if (ModelUtils.isArraySchema(schema)) {
+                  Schema items = ((ArraySchema) schema).getItems();
                     if (ModelUtils.isComposedSchema(items)) {
-                        addOneOfNameExtension((ComposedSchema) items, nOneOf);
-                        addOneOfInterfaceModel((ComposedSchema) items, nOneOf, openAPI);
+                      addOneOfForComposedSchemaArray(nOneOf, modelName, (ComposedSchema) items, openAPI);
                     }
-                } else if (ModelUtils.isMapSchema(s)) {
-                    Schema addProps = getAdditionalProperties(s);
+                } else if (ModelUtils.isMapSchema(schema)) {
+                    Schema addProps = getAdditionalProperties(schema);
                     if (addProps != null && ModelUtils.isComposedSchema(addProps)) {
                         addOneOfNameExtension((ComposedSchema) addProps, nOneOf);
                         addOneOfInterfaceModel((ComposedSchema) addProps, nOneOf, openAPI);
                     }
                 }
             }
+        }
+    }
+
+    protected void addOneOfForComposedSchemaArray(String nOneOf, String modelName, ComposedSchema items, OpenAPI openAPI) {
+        addOneOfNameExtension(items, nOneOf);
+        addOneOfInterfaceModel(items, nOneOf, openAPI);
+    }
+
+    protected void addOneOfForComposedSchema(Entry<String, Schema> stringSchemaEntry, String modelName, ComposedSchema composedSchema,
+        String nOneOf, OpenAPI openAPI) {
+        if (stringSchemaEntry.getKey().contains("/")) {
+            // if this is property schema, we also need to generate the oneOf interface model
+            addOneOfNameExtension(composedSchema, nOneOf);
+            addOneOfInterfaceModel(composedSchema, nOneOf, openAPI);
+        } else {
+            // else this is a component schema, so we will just use that as the oneOf interface model
+            addOneOfNameExtension(composedSchema, modelName);
         }
     }
 
@@ -4610,13 +4619,13 @@ public class DefaultCodegen implements CodegenConfig {
      * of the 'additionalProperties' keyword. Some language generator use class inheritance
      * to implement additional properties. For example, in Java the generated model class
      * has 'extends HashMap' to represent the additional properties.
-     * 
+     *
      * TODO: it's not a good idea to use single class inheritance to implement
      * additionalProperties. That may work for non-composed schemas, but that does not
      * work for composed 'allOf' schemas. For example, in Java, if additionalProperties
      * is set to true (which it should be by default, per OAS spec), then the generated
      * code has extends HashMap. That wouldn't work for composed 'allOf' schemas.
-     * 
+     *
      * @param model the codegen representation of the OAS schema.
      * @param name the name of the model.
      * @param schema the input OAS schema.
@@ -5847,7 +5856,7 @@ public class DefaultCodegen implements CodegenConfig {
                                 "'application/x-www-form-urlencoded' or 'multipart/?'");
                         LOGGER.warn("schema: " + schema);
                         LOGGER.warn("codegenModel is null. Default to UNKNOWN_BASE_TYPE");
-                        codegenModelName = "UNKNOWN_BASE_TYPE";
+                        codegenModelName = getCodegenModelName(codegenProperty);
                         codegenModelDescription = "UNKNOWN_DESCRIPTION";
                     }
 
@@ -6060,6 +6069,10 @@ public class DefaultCodegen implements CodegenConfig {
     private void addJsonSchemaForBodyRequestInCaseItsNotPresent(CodegenParameter codegenParameter, RequestBody body) {
         if (codegenParameter.jsonSchema == null)
             codegenParameter.jsonSchema = Json.pretty(body);
+    }
+
+    protected String getCodegenModelName(CodegenProperty codegenProperty) {
+        return "UNKNOWN_BASE_TYPE";
     }
 
     protected void addOption(String key, String description, String defaultValue) {
@@ -6471,7 +6484,7 @@ public class DefaultCodegen implements CodegenConfig {
 
     /**
      * Returns the additionalProperties Schema for the specified input schema.
-     * 
+     *
      * The additionalProperties keyword is used to control the handling of additional, undeclared
      * properties, that is, properties whose names are not listed in the properties keyword.
      * The additionalProperties keyword may be either a boolean or an object.
@@ -6479,7 +6492,7 @@ public class DefaultCodegen implements CodegenConfig {
      * By default when the additionalProperties keyword is not specified in the input schema,
      * any additional properties are allowed. This is equivalent to setting additionalProperties
      * to the boolean value True or setting additionalProperties: {}
-     * 
+     *
      * @param schema the input schema that may or may not have the additionalProperties keyword.
      * @return the Schema of the additionalProperties. The null value is returned if no additional
      *         properties are allowed.
