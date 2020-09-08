@@ -832,7 +832,7 @@ public class DefaultCodegen implements CodegenConfig {
 
     protected void addOneOfForComposedSchema(Entry<String, Schema> stringSchemaEntry, String modelName, ComposedSchema composedSchema,
         String nOneOf, OpenAPI openAPI) {
-        if (stringSchemaEntry.getKey().contains("/")) {
+        if (stringSchemaEntry.getKey().contains("/") || "JavaSpring".equals(templateDir)) {
             // if this is property schema, we also need to generate the oneOf interface model
             addOneOfNameExtension(composedSchema, nOneOf);
             addOneOfInterfaceModel(composedSchema, nOneOf, openAPI);
